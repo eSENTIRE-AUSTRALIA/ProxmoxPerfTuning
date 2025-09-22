@@ -2,6 +2,7 @@
 # Proxmox Performance Diagnostic Script
 # Validates VM configuration, network, storage, and system tunables
 # Version: 1.0
+#curl -fsSL https://raw.githubusercontent.com/eSENTIRE-AUSTRALIA/ProxmoxPerfTuning/refs/heads/main/Proxmox-Script.sh -o Proxmox-Script.sh
 
 set -euo pipefail
 

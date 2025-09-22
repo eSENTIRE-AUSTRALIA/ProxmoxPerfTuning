@@ -48,4 +48,4 @@ fi
 echo "Storage status:"
 timeout 10 pvesm status 2>/dev/null || echo "Storage check timeout/failed"
 
-echo -e "\n=== Diagnosis complete ==="
+echo -e "\n=== Diagnosis complete ===="
