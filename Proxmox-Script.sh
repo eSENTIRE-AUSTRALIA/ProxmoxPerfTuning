@@ -7,9 +7,14 @@
 # Validates VM configuration, network, storage, and system tunables
 # Version: 2.0 - Fixed hanging issues with timeouts and error handling
 
-set -euo pipefail
+set -eo pipefail
 
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Fix BASH_SOURCE variable issue
+if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
+    readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+else
+    readonly SCRIPT_DIR="$(pwd)"
+fi
 readonly LOG_FILE="${SCRIPT_DIR}/proxmox_diagnostic_$(date +%Y%m%d_%H%M%S).log"
 readonly VERBOSE=${VERBOSE:-false}
 
@@ -1197,7 +1202,7 @@ check_ceph_performance() {
     fi
 }
 
-# New function: Real-time I/O performance monitoring
+# Check for real-time I/O performance
 check_realtime_io_performance() {
     log_info "Sampling real-time I/O performance..."
     
@@ -1220,9 +1225,13 @@ check_realtime_io_performance() {
                 device=$(echo "$line" | awk '{print $1}')
                 util=$(echo "$line" | awk '{print $NF}' | tr -d '%')
                 
-                if [[ "$util" =~ ^[0-9]+\.?[0-9]*$ ]] && (( $(echo "$util > 80" | bc -l) 2>/dev/null )); then
-                    log_warning "Device $device: High I/O utilization (${util}%)"
-                    high_util_devices=$((high_util_devices + 1))
+                # Simple integer comparison instead of bc
+                if [[ "$util" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                    local util_int=${util%.*}
+                    if [[ $util_int -gt 80 ]]; then
+                        log_warning "Device $device: High I/O utilization (${util}%)"
+                        high_util_devices=$((high_util_devices + 1))
+                    fi
                 fi
                 
             done <<< "$io_stats"
@@ -1236,7 +1245,7 @@ check_realtime_io_performance() {
     fi
 }
 
-# New function: Real-time performance bottleneck identification
+# Enhanced performance bottleneck identification with fixed arithmetic
 check_performance_bottlenecks() {
     print_section "Performance Bottleneck Analysis"
     
@@ -1253,13 +1262,14 @@ check_performance_bottlenecks() {
     local cpu_count
     cpu_count=$(nproc)
     
-    local load_threshold=$((cpu_count * 80 / 100)) # 80% of CPU count
+    # Simple floating point comparison without bc
+    local load_int=${load_1min%.*}
     
-    if (( $(echo "$load_1min > $cpu_count" | bc -l) 2>/dev/null )); then
+    if [[ $load_int -gt $cpu_count ]]; then
         log_warning "CPU bottleneck: 1-minute load ($load_1min) exceeds CPU count ($cpu_count)"
         bottlenecks=$((bottlenecks + 1))
-    elif (( $(echo "$load_1min > $load_threshold" | bc -l) 2>/dev/null )); then
-        log_info "CPU load elevated: 1-minute load ($load_1min) approaching capacity"
+    elif [[ $load_int -eq $cpu_count ]]; then
+        log_info "CPU load at capacity: 1-minute load ($load_1min) equals CPU count"
     else
         log_success "CPU load healthy: $load_1min (vs $cpu_count cores)"
     fi
@@ -1288,7 +1298,9 @@ check_performance_bottlenecks() {
         local mem_pressure
         mem_pressure=$(awk '/some avg10=/ {print $2}' /proc/pressure/memory 2>/dev/null | cut -d'=' -f2 || echo "0")
         
-        if [[ -n "$mem_pressure" ]] && (( $(echo "$mem_pressure > 10" | bc -l) 2>/dev/null )); then
+        # Simple integer comparison
+        local pressure_int=${mem_pressure%.*}
+        if [[ -n "$pressure_int" && $pressure_int -gt 10 ]]; then
             log_warning "Memory pressure detected: ${mem_pressure}% (10min average)"
             bottlenecks=$((bottlenecks + 1))
         fi
@@ -1351,10 +1363,12 @@ check_performance_bottlenecks() {
     local io_wait
     io_wait=$(iostat -c 1 2 2>/dev/null | tail -1 | awk '{print $4}' || echo "0")
     
-    if [[ -n "$io_wait" ]] && (( $(echo "$io_wait > 20" | bc -l) 2>/dev/null )); then
+    # Simple integer comparison for I/O wait
+    local io_wait_int=${io_wait%.*}
+    if [[ -n "$io_wait_int" && $io_wait_int -gt 20 ]]; then
         log_warning "I/O bottleneck: High I/O wait time (${io_wait}%)"
         io_bottlenecks=$((io_bottlenecks + 1))
-    elif [[ -n "$io_wait" ]] && (( $(echo "$io_wait > 10" | bc -l) 2>/dev/null )); then
+    elif [[ -n "$io_wait_int" && $io_wait_int -gt 10 ]]; then
         log_info "I/O wait time elevated: ${io_wait}%"
     else
         log_success "I/O wait time healthy: ${io_wait}%"
@@ -1822,8 +1836,8 @@ main() {
     echo "   • Consider traffic shaping for QoS" >&3
 }
 
-# Script initialization
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+# Script initialization with fixed BASH_SOURCE handling
+if [[ "${BASH_SOURCE[0]:-$0}" == "${0}" ]]; then
     setup_logging
     main
     log_success "Proxmox diagnostic completed successfully. Check $LOG_FILE for full details."
