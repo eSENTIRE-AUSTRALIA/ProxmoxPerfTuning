@@ -1,4 +1,5 @@
 
+#bash -c "$(curl -fsSL https://raw.githubusercontent.com/eSENTIRE-AUSTRALIA/ProxmoxPerfTuning/refs/heads/main/Proxmox-Script.sh)"
 #curl -fsSL https://raw.githubusercontent.com/eSENTIRE-AUSTRALIA/ProxmoxPerfTuning/refs/heads/main/Proxmox-Script.sh -o Proxmox-Script.sh
 
 #!/usr/bin/env bash
